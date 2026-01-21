@@ -1,0 +1,49 @@
+name: Build addons
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ ubuntu-24.04, ubuntu-24.04-arm ]
+        node: [ 20, 22, 24 ]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: npm install ssh2
+
+      - name: Determine architecture
+        id: arch
+        run: |
+          ARCH=$(arch)
+          if [ "$ARCH" = "aarch64" ]; then
+            echo "arch=arm64" >> $GITHUB_OUTPUT
+          elif [ "$ARCH" = "x86_64" ]; then
+            echo "arch=x64" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create tgz archive
+        run: |
+          mkdir -p artifacts
+          tar -czvf artifacts/node${{ matrix.node }}-${{ steps.arch.outputs.arch }}.tgz \
+            node_modules/ssh2/lib/protocol/crypto/build/Release/sshcrypto.node \
+            node_modules/cpu-features/build/Release/cpufeatures.node
+
+      - name: Upload prebuilds
+        uses: actions/upload-artifact@v5
+        with:
+          name: addons-node${{ matrix.node }}-${{ steps.arch.outputs.arch }}.tgz
+          path: artifacts/*.tgz
+
